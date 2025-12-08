@@ -6,6 +6,7 @@ import MeterReadings from './components/MeterReadings';
 import ConsumptionStats from './components/ConsumptionStats';
 import CalculationSummary from './components/CalculationSummary';
 import BillHistory from './components/BillHistory';
+import BillEstimator from './components/BillEstimator';
 import { Lightbulb, Database, Download } from 'lucide-react';
 
 const App: React.FC = () => {
@@ -202,6 +203,8 @@ const App: React.FC = () => {
               calculations={calculationResult.userCalculations}
               totalUnits={calculationResult.totalUnits}
             />
+
+            <BillEstimator />
 
             <BillHistory 
               history={history}
