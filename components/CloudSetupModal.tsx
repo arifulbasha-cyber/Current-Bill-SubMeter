@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { useLanguage } from '../i18n';
-import { X, Cloud, Save, AlertCircle } from 'lucide-react';
+import { X, Cloud, Save, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { firebaseService } from '../services/firebase';
 import { FirebaseConfigJson } from '../types';
 
@@ -19,13 +19,33 @@ const CloudSetupModal: React.FC<CloudSetupModalProps> = ({ isOpen, onClose, onCo
   if (!isOpen) return null;
 
   const handleConnect = () => {
+    setError(null);
+    let input = jsonInput.trim();
+    
+    // Robust parsing logic to handle direct copy-paste from Firebase Console
     try {
-      const config: FirebaseConfigJson = JSON.parse(jsonInput);
-      firebaseService.initialize(config);
+      // 1. Strip "const firebaseConfig =" and trailing semicolon if present
+      if (input.includes('=')) {
+        input = input.substring(input.indexOf('=') + 1).trim();
+      }
+      if (input.endsWith(';')) {
+        input = input.slice(0, -1).trim();
+      }
+
+      // 2. Use Function constructor to parse valid JS object literal (relaxed JSON)
+      // This handles unquoted keys like { apiKey: "..." } which JSON.parse would fail on
+      const configObject = new Function('return ' + input)();
+
+      // 3. Validate critical fields
+      if (!configObject.apiKey || !configObject.authDomain || !configObject.projectId) {
+        throw new Error("Missing required Firebase keys (apiKey, authDomain, or projectId).");
+      }
+
+      firebaseService.initialize(configObject as FirebaseConfigJson);
       onConnected();
       onClose();
     } catch (e: any) {
-      setError("Invalid JSON or Configuration. Please copy the object exactly from Firebase Console.");
+      setError("Invalid Configuration. Please copy the 'firebaseConfig' object exactly from the Firebase Console.");
       console.error(e);
     }
   };
@@ -45,7 +65,7 @@ const CloudSetupModal: React.FC<CloudSetupModalProps> = ({ isOpen, onClose, onCo
           </button>
         </div>
 
-        <div className="p-6 space-y-4">
+        <div className="p-6 space-y-4 overflow-y-auto">
           {error && (
             <div className="bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 p-3 rounded-lg text-sm flex items-start gap-2">
               <AlertCircle className="w-5 h-5 shrink-0" />
@@ -53,16 +73,30 @@ const CloudSetupModal: React.FC<CloudSetupModalProps> = ({ isOpen, onClose, onCo
             </div>
           )}
           
+          <div className="bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-lg border border-indigo-100 dark:border-indigo-800">
+             <h3 className="text-xs font-bold text-indigo-800 dark:text-indigo-300 uppercase mb-2">Before Connecting:</h3>
+             <ul className="space-y-2 text-sm text-slate-700 dark:text-slate-300">
+                <li className="flex items-start gap-2">
+                   <CheckCircle2 className="w-4 h-4 text-green-500 mt-0.5 shrink-0" />
+                   <span>Enable <strong>Authentication</strong> (Google Sign-in) in Firebase Console.</span>
+                </li>
+                <li className="flex items-start gap-2">
+                   <CheckCircle2 className="w-4 h-4 text-green-500 mt-0.5 shrink-0" />
+                   <span>Create <strong>Firestore Database</strong> (Start in Test Mode).</span>
+                </li>
+             </ul>
+          </div>
+
           <div>
             <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">{t('paste_config')}</label>
             <textarea
               value={jsonInput}
               onChange={(e) => setJsonInput(e.target.value)}
-              className="w-full h-40 p-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-white font-mono text-xs focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-              placeholder={t('config_placeholder')}
+              className="w-full h-32 p-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-white font-mono text-xs focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              placeholder={'const firebaseConfig = {\n  apiKey: "...",\n  authDomain: "...",\n  ...\n};'}
             ></textarea>
-            <p className="text-xs text-slate-500 dark:text-slate-500 mt-2">
-              Go to Firebase Console &gt; Project Settings &gt; General &gt; Your Apps &gt; SDK Setup and copy the `firebaseConfig` object.
+            <p className="text-xs text-slate-500 dark:text-slate-500 mt-2 leading-relaxed">
+              Copy the entire <code>const firebaseConfig = ...</code> block from <strong>Project Settings &gt; General &gt; Your Apps</strong>.
             </p>
           </div>
         </div>
