@@ -73,3 +73,10 @@ export interface FirebaseConfigJson {
   appId: string;
   measurementId?: string;
 }
+
+export interface DraftData {
+  updatedAt: number;
+  config: BillConfig;
+  mainMeter: MeterReading;
+  meters: MeterReading[];
+}

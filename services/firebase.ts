@@ -2,7 +2,7 @@
 import { initializeApp, FirebaseApp, getApps } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, Auth, User } from 'firebase/auth';
 import { getFirestore, Firestore, collection, doc, setDoc, getDoc, getDocs, deleteDoc } from 'firebase/firestore';
-import { FirebaseConfigJson, SavedBill, TariffConfig, Tenant } from '../types';
+import { FirebaseConfigJson, SavedBill, TariffConfig, Tenant, DraftData } from '../types';
 
 class FirebaseService {
   private app: FirebaseApp | null = null;
@@ -111,6 +111,18 @@ class FirebaseService {
     const docRef = doc(this.db, 'users', uid, 'settings', 'tenants');
     const snap = await getDoc(docRef);
     return snap.exists() ? (snap.data().list as Tenant[]) : [];
+  }
+
+  // Drafts
+  public async saveDraft(uid: string, draft: DraftData) {
+    if (!this.db) throw new Error("DB not ready");
+    await setDoc(doc(this.db, 'users', uid, 'draft', 'current'), draft);
+  }
+
+  public async getDraft(uid: string): Promise<DraftData | null> {
+    if (!this.db) throw new Error("DB not ready");
+    const snap = await getDoc(doc(this.db, 'users', uid, 'draft', 'current'));
+    return snap.exists() ? (snap.data() as DraftData) : null;
   }
 }
 

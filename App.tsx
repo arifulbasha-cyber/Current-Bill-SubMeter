@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { BillConfig, MeterReading, BillCalculationResult, UserCalculation, SavedBill, TariffConfig, Tenant } from './types';
 import { INITIAL_CONFIG, INITIAL_METERS, INITIAL_MAIN_METER, DEFAULT_TARIFF_CONFIG } from './constants';
 import BillConfiguration from './components/BillConfiguration';
@@ -15,7 +15,7 @@ import CloudSetupModal from './components/CloudSetupModal';
 import MobileNav from './components/MobileNav';
 import SkeletonLoader from './components/SkeletonLoader';
 import ModalWrapper from './components/ModalWrapper';
-import { Lightbulb, Database, Download, Settings, Users, Cloud, LogIn, LogOut, Moon, Sun, Menu, ArrowRight, PieChart, BarChart3 } from 'lucide-react';
+import { Lightbulb, Database, Download, Settings, Users, Cloud, LogIn, LogOut, Moon, Sun, Menu, ArrowRight, PieChart, BarChart3, RefreshCw } from 'lucide-react';
 import { LanguageProvider, useLanguage } from './i18n';
 import { ThemeProvider, useTheme } from './components/ThemeContext';
 import { firebaseService } from './services/firebase';
@@ -63,18 +63,43 @@ const AppContent: React.FC = () => {
   const [isFirebaseReady, setIsFirebaseReady] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
-  // Auto-Save Draft State
+  // Prevent initial render from triggering cloud save
+  const isFirstRender = useRef(true);
+
+  // Auto-Save Draft to Local Storage and Sync to Cloud (Debounced)
   useEffect(() => {
+    if (isFirstRender.current) {
+        isFirstRender.current = false;
+        return;
+    }
+
+    // 1. Save Local Immediately
+    const now = Date.now();
     localStorage.setItem('tmss_draft_config', JSON.stringify(config));
-  }, [config]);
-
-  useEffect(() => {
     localStorage.setItem('tmss_draft_main_meter', JSON.stringify(mainMeter));
-  }, [mainMeter]);
-
-  useEffect(() => {
     localStorage.setItem('tmss_draft_meters', JSON.stringify(meters));
-  }, [meters]);
+    localStorage.setItem('tmss_draft_updatedAt', now.toString());
+
+    // 2. Debounced Cloud Save
+    if (user && isFirebaseReady) {
+        setIsSyncing(true);
+        const timer = setTimeout(async () => {
+            try {
+                await firebaseService.saveDraft(user.uid, {
+                    updatedAt: now,
+                    config,
+                    mainMeter,
+                    meters
+                });
+                setIsSyncing(false);
+            } catch (e) {
+                console.error("Failed to sync draft", e);
+                setIsSyncing(false);
+            }
+        }, 2000); // Wait 2 seconds of inactivity
+        return () => clearTimeout(timer);
+    }
+  }, [config, mainMeter, meters, user, isFirebaseReady]);
 
   // Init Check
   useEffect(() => {
@@ -86,7 +111,7 @@ const AppContent: React.FC = () => {
     }
   }, []);
 
-  // Data Loading Strategy (History/Settings)
+  // Data Loading Strategy (History/Settings/Draft Conflict)
   useEffect(() => {
     const loadData = async () => {
        setIsSyncing(true);
@@ -102,6 +127,23 @@ const AppContent: React.FC = () => {
 
              const cloudTenants = await firebaseService.getTenants(user.uid);
              setTenants(cloudTenants);
+
+             // Check for Newer Draft
+             const cloudDraft = await firebaseService.getDraft(user.uid);
+             const localUpdatedAt = parseInt(localStorage.getItem('tmss_draft_updatedAt') || '0');
+             
+             if (cloudDraft && cloudDraft.updatedAt > localUpdatedAt) {
+                 // Cloud is newer, load it automatically
+                 setConfig(cloudDraft.config);
+                 setMainMeter(cloudDraft.mainMeter);
+                 setMeters(cloudDraft.meters);
+                 // We don't need to manually update local storage here, because setting state
+                 // will trigger the main useEffect which saves to local storage.
+                 // However, we want to update the timestamp so we don't think local is newer immediately
+                 localStorage.setItem('tmss_draft_updatedAt', cloudDraft.updatedAt.toString());
+                 // Small visual indicator could go here
+                 console.log("Loaded newer draft from cloud");
+             }
           } catch (e) {
              console.error("Cloud load error", e);
           }
@@ -361,16 +403,20 @@ const AppContent: React.FC = () => {
                <div className="flex items-center gap-1 mt-1">
                  {user ? (
                     <div className="flex items-center gap-1 text-[10px] font-bold text-green-600 dark:text-green-400">
-                        <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></div>
+                        <Cloud className="w-3 h-3" />
                         {t('cloud_mode')}
                     </div>
                  ) : (
                     <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400 dark:text-slate-500">
-                        <div className="w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-600"></div>
+                        <Database className="w-3 h-3" />
                         {t('local_mode')}
                     </div>
                  )}
-                 {isSyncing && <span className="text-[10px] text-indigo-500 animate-pulse ml-1">{t('syncing')}</span>}
+                 {isSyncing ? (
+                    <span className="text-[10px] text-indigo-500 animate-pulse ml-1 flex items-center gap-1"><RefreshCw className="w-3 h-3 animate-spin" /> {t('syncing')}</span>
+                 ) : (
+                    user && <span className="text-[10px] text-slate-400 ml-1">{t('draft_synced')}</span>
+                 )}
                </div>
             </div>
           </div>

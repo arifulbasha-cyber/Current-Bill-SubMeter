@@ -46,6 +46,8 @@ const translations: Record<Language, Record<string, string>> = {
     'cloud_mode': 'Cloud Mode',
     'local_mode': 'Local Mode',
     'login_prompt': 'Login to sync data',
+    'draft_synced': 'Draft Synced',
+    'draft_newer_loaded': 'Newer draft found in cloud and loaded.',
 
     // Tariff Settings
     'tariff_settings': 'Master Tariff Settings',
@@ -257,6 +259,8 @@ const translations: Record<Language, Record<string, string>> = {
     'cloud_mode': 'ক্লাউড মোড',
     'local_mode': 'লোকাল মোড',
     'login_prompt': 'ডেটা সিঙ্ক করতে লগইন করুন',
+    'draft_synced': 'ড্রাফ্ট সিঙ্ক হয়েছে',
+    'draft_newer_loaded': 'ক্লাউড থেকে নতুন ড্রাফ্ট লোড হয়েছে।',
 
     // Tariff Settings
     'tariff_settings': 'ট্যারিফ সেটিংস',
